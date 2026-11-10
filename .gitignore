@@ -13,3 +13,5 @@ public/uploads/*
 npm-debug.log*
 next-env.d.ts
 *.tsbuildinfo
+uploads/*
+!uploads/.gitkeep
