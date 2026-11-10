@@ -81,7 +81,7 @@ export default async function AccountPage({
       )}
       {dogrulama === "gonderildi" && (
         <p className="mb-5 rounded-2xl bg-sun/40 px-5 py-4 text-sm font-semibold text-ink">
-          Doğrulama bağlantısı e-posta adresine gönderildi. (Geliştirme ortamında CMD penceresindeki bağlantıya tıklayabilirsin.)
+          Doğrulama bağlantısı e-posta adresine gönderildi.
         </p>
       )}
       {(dogrulama === "hata" || dogrulama === "suresi_doldu") && (

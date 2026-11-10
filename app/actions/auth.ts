@@ -116,7 +116,7 @@ export async function requestPasswordReset(
 
   return {
     success:
-      "Eğer bu e-posta ile kayıtlı bir hesap varsa, şifre sıfırlama bağlantısı gönderildi. (Geliştirme ortamında CMD ekranını kontrol edin.)",
+      "Eğer bu e-posta ile kayıtlı bir hesap varsa, şifre sıfırlama bağlantısı gönderildi.",
   };
 }
 
