@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getUserId } from "@/lib/session";
 import { formatPrice } from "@/lib/format";
-import { startPayment } from "@/app/actions/payment";
+import { startPayment, cancelAndRefundOrder } from "@/app/actions/payment";
 import CheckoutSteps from "@/components/CheckoutSteps";
 import {
   FULFILLMENT_LABELS,
@@ -31,13 +31,13 @@ export default async function OrderPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ odeme?: string }>;
+  searchParams: Promise<{ odeme?: string; iptal?: string }>;
 }) {
   const userId = await getUserId();
   if (!userId) redirect("/giris");
 
   const { id } = await params;
-  const { odeme } = await searchParams;
+  const { odeme, iptal } = await searchParams;
 
   const order = await prisma.order.findFirst({
     where: { id, userId },
@@ -45,7 +45,6 @@ export default async function OrderPage({
   });
   if (!order) notFound();
 
-  // Ürünleri mağazaya göre gruplar
   const groups = new Map<string, { storeName: string; items: typeof order.items }>();
   for (const i of order.items) {
     const g = groups.get(i.sellerId) ?? { storeName: i.seller.storeName, items: [] };
@@ -53,11 +52,15 @@ export default async function OrderPage({
     groups.set(i.sellerId, g);
   }
 
+  const anyShipped = order.items.some((i) => i.fulfillment !== "PREPARING");
+  const canCancel =
+    (order.status === "PENDING" || order.status === "PAID") && !anyShipped;
+
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8">
       {order.status === "PENDING" && <CheckoutSteps current={3} />}
 
-      {odeme === "basarili" && order.status !== "PENDING" && (
+      {odeme === "basarili" && order.status === "PAID" && (
         <p className="mb-5 rounded-2xl bg-mint-soft px-5 py-4 font-semibold text-mint-ink">
           Ödemen alındı, teşekkürler! Siparişin hazırlanıyor.
         </p>
@@ -68,6 +71,35 @@ export default async function OrderPage({
           className="mb-5 rounded-2xl bg-coral/10 px-5 py-4 font-semibold text-coral-dark"
         >
           Ödeme tamamlanamadı. Aşağıdan tekrar deneyebilirsin.
+        </p>
+      )}
+      {odeme === "stok_yetersiz" && (
+        <p
+          role="alert"
+          className="mb-5 rounded-2xl bg-coral/10 px-5 py-4 font-semibold text-coral-dark"
+        >
+          Siparişteki ürünlerden birinin stoğu tükendiği için ödeme başlatılamadı.
+        </p>
+      )}
+      {odeme === "stok_bitti_iade" && (
+        <p
+          role="alert"
+          className="mb-5 rounded-2xl bg-coral/10 px-5 py-4 font-semibold text-coral-dark"
+        >
+          Ödeme sırasında ürün stoğu tükendiği için siparişin iptal edildi ve ödemen iyzico üzerinden otomatik olarak kartına iade edildi.
+        </p>
+      )}
+      {iptal === "basarili" && order.status === "CANCELLED" && (
+        <p className="mb-5 rounded-2xl bg-mint-soft px-5 py-4 font-semibold text-mint-ink">
+          Siparişin iptal edildi{order.paymentRef ? " ve ödemen kartına iade edildi" : ""}.
+        </p>
+      )}
+      {iptal === "iyzico_hata" && (
+        <p
+          role="alert"
+          className="mb-5 rounded-2xl bg-coral/10 px-5 py-4 font-semibold text-coral-dark"
+        >
+          İade işlemi sırasında ödeme sağlayıcısında bir hata oluştu. Lütfen tekrar dene.
         </p>
       )}
 
@@ -167,6 +199,27 @@ export default async function OrderPage({
           <form action={startPayment.bind(null, order.id)}>
             <button className="btn mt-4 w-full sm:w-auto">
               Güvenli ödeme ile öde
+            </button>
+          </form>
+        </section>
+      )}
+
+      {canCancel && (
+        <section className="panel mt-4 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="font-bold text-sm">Siparişi iptal etmek mi istiyorsun?</p>
+            <p className="text-xs text-muted">
+              {order.status === "PAID"
+                ? "Ürünler henüz kargoya verilmediği için iptal ettiğinde ödemen anında kartına iade edilir."
+                : "Ödeme bekleyen bu siparişi iptal edebilirsin."}
+            </p>
+          </div>
+          <form action={cancelAndRefundOrder.bind(null, order.id)}>
+            <button
+              type="submit"
+              className="rounded-full border border-coral px-5 py-2 text-sm font-semibold text-coral transition hover:bg-coral hover:text-white"
+            >
+              {order.status === "PAID" ? "İptal Et ve İade Al" : "Siparişi İptal Et"}
             </button>
           </form>
         </section>

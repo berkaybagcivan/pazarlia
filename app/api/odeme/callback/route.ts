@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { retrieveCheckoutForm } from "@/lib/iyzico";
+import { processSuccessfulPayment } from "@/lib/payment-processor";
 
 export async function POST(request: Request) {
   const base = process.env.APP_URL ?? "http://localhost:3000";
@@ -19,47 +19,25 @@ export async function POST(request: Request) {
   }
 
   const orderId = String(result?.basketId ?? result?.conversationId ?? "");
-  const order = orderId
-    ? await prisma.order.findUnique({ where: { id: orderId } })
-    : null;
-  if (!order) return go("/");
+  if (!orderId) return go("/");
 
-  const paid =
-    result.status === "success" &&
-    result.paymentStatus === "SUCCESS" &&
-    Math.round(Number(result.paidPrice) * 100) === order.total;
-
-  if (!paid) {
+  if (result.status !== "success" || result.paymentStatus !== "SUCCESS") {
     console.error("Ödeme başarısız:", result.paymentStatus, result.errorCode, result.errorMessage);
-    return go(`/siparis/${order.id}?odeme=hata`);
+    return go(`/siparis/${orderId}?odeme=hata`);
   }
 
-  await prisma.$transaction(async (tx) => {
-    const fresh = await tx.order.findUnique({
-      where: { id: order.id },
-      include: { items: true },
-    });
-    if (!fresh || fresh.status !== "PENDING") return; // zaten işlenmiş
+  const paidKurus = Math.round(Number(result.paidPrice) * 100);
+  const paymentId = String(result.paymentId ?? "");
 
-    for (const item of fresh.items) {
-      await tx.product.update({
-        where: { id: item.productId },
-        data: { stock: { decrement: item.quantity } },
-      });
-    }
+  const outcome = await processSuccessfulPayment(orderId, paymentId, paidKurus);
 
-    await tx.cartItem.deleteMany({
-      where: {
-        userId: fresh.userId,
-        productId: { in: fresh.items.map((i) => i.productId) },
-      },
-    });
+  if (outcome.status === "OUT_OF_STOCK_REFUNDED") {
+    return go(`/siparis/${orderId}?odeme=stok_bitti_iade`);
+  }
 
-    await tx.order.update({
-      where: { id: fresh.id },
-      data: { status: "PAID", paymentRef: String(result.paymentId ?? "") },
-    });
-  });
+  if (outcome.status === "INVALID") {
+    return go(`/siparis/${orderId}?odeme=hata`);
+  }
 
-  return go(`/siparis/${order.id}?odeme=basarili`);
+  return go(`/siparis/${orderId}?odeme=basarili`);
 }
