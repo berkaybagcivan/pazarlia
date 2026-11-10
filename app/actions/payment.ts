@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { sendOrderCancelledEmail } from "@/lib/mail";
 import { getUserId } from "@/lib/session";
 import { initializeCheckoutForm, cancelPayment, toDecimal, toGsm } from "@/lib/iyzico";
 
@@ -95,7 +96,7 @@ export async function cancelAndRefundOrder(orderId: string) {
 
   const order = await prisma.order.findFirst({
     where: { id: orderId, userId },
-    include: { items: true },
+    include: { items: true, user: true },
   });
 
   if (!order) redirect("/hesabim");
@@ -145,6 +146,8 @@ export async function cancelAndRefundOrder(orderId: string) {
       data: { status: "CANCELLED" },
     });
   });
+
+  await sendOrderCancelledEmail({ email: order.user.email, orderId: order.id, shippingName: order.shippingName, total: order.total, wasPaid: order.status === "PAID" });
 
   revalidatePath(`/siparis/${order.id}`);
   revalidatePath("/hesabim");

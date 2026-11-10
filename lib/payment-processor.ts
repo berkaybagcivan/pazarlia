@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { cancelPayment } from "@/lib/iyzico";
+import {
+  sendOrderConfirmationEmail,
+  sendOrderCancelledEmail,
+} from "@/lib/mail";
 
 export type ProcessPaymentResult =
   | { status: "SUCCESS" }
@@ -14,6 +18,7 @@ export async function processSuccessfulPayment(
 ): Promise<ProcessPaymentResult> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
+    include: { user: true, items: true },
   });
 
   if (!order || paidKurus !== order.total) {
@@ -30,7 +35,6 @@ export async function processSuccessfulPayment(
 
   try {
     await prisma.$transaction(async (tx) => {
-      // Siparişi yalnızca hala PENDING ise PAID olarak kilitle (aynı anda çalışan callback ve webhook çakışmasını önler)
       const locked = await tx.order.updateMany({
         where: { id: orderId, status: "PENDING" },
         data: { status: "PAID", paymentRef: paymentId },
@@ -44,12 +48,11 @@ export async function processSuccessfulPayment(
         where: { orderId },
       });
 
-      // Her ürün için atomik stok kontrolü ve düşürme (Stok yarışı / Race Condition koruması)
       for (const item of items) {
         const updated = await tx.product.updateMany({
           where: {
             id: item.productId,
-             active: true,
+            active: true,
             stock: { gte: item.quantity },
           },
           data: {
@@ -62,13 +65,25 @@ export async function processSuccessfulPayment(
         }
       }
 
-      // Müşterinin sepetini temizle
       await tx.cartItem.deleteMany({
         where: {
           userId: order.userId,
           productId: { in: items.map((i) => i.productId) },
         },
       });
+    });
+
+    // Müşteriye Sipariş Onay E-postası Gönder
+    await sendOrderConfirmationEmail({
+      email: order.user.email,
+      orderId: order.id,
+      shippingName: order.shippingName,
+      total: order.total,
+      items: order.items.map((i) => ({
+        title: i.title,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      })),
     });
 
     return { status: "SUCCESS" };
@@ -80,7 +95,6 @@ export async function processSuccessfulPayment(
     }
 
     if (msg.startsWith("OUT_OF_STOCK")) {
-      // Stok yarışında kaybedildiyse ödemeyi iyzico üzerinden anında iptal/iade et ve siparişi CANCELLED yap
       try {
         if (paymentId) await cancelPayment(paymentId);
       } catch (refundErr) {
@@ -90,6 +104,15 @@ export async function processSuccessfulPayment(
       await prisma.order.update({
         where: { id: orderId },
         data: { status: "CANCELLED", paymentRef: paymentId },
+      });
+
+      await sendOrderCancelledEmail({
+        email: order.user.email,
+        orderId: order.id,
+        shippingName: order.shippingName,
+        total: order.total,
+        wasPaid: true,
+        reason: "Ödeme sırasında ürün stoğu tükendiği için otomatik iade yapıldı.",
       });
 
       return { status: "OUT_OF_STOCK_REFUNDED" };

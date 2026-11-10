@@ -5,10 +5,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSeller } from "@/lib/seller";
 import { CARRIERS } from "@/lib/fulfillment";
+import { sendOrderShippedEmail, sendOrderDeliveredEmail } from "@/lib/mail";
 
 export type ShipState = { error?: string } | undefined;
 
-// Siparişin genel durumunu tüm kalemlerin durumundan hesaplar
 async function syncOrderStatus(tx: Prisma.TransactionClient, orderId: string) {
   const items = await tx.orderItem.findMany({
     where: { orderId },
@@ -49,7 +49,7 @@ export async function markShipped(
       fulfillment: "PREPARING",
       order: { status: { in: ["PAID", "SHIPPED"] } },
     },
-    select: { id: true },
+    select: { id: true, title: true, quantity: true },
   });
   if (items.length === 0) {
     return { error: "Bu sipariş kargoya verilemez. Sayfayı yenileyip durumu kontrol et." };
@@ -68,6 +68,22 @@ export async function markShipped(
     await syncOrderStatus(tx, orderId);
   });
 
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { user: true },
+  });
+
+  if (order) {
+    await sendOrderShippedEmail({
+      email: order.user.email,
+      orderId: order.id,
+      shippingName: order.shippingName,
+      carrier,
+      trackingNumber,
+      items: items.map((i) => ({ title: i.title, quantity: i.quantity })),
+    });
+  }
+
   revalidatePath(`/satici/siparisler/${orderId}`);
   revalidatePath("/satici/siparisler");
   revalidatePath(`/siparis/${orderId}`);
@@ -83,7 +99,7 @@ export async function markDelivered(orderId: string) {
       fulfillment: "SHIPPED",
       order: { status: { in: ["PAID", "SHIPPED"] } },
     },
-    select: { id: true },
+    select: { id: true, title: true, quantity: true },
   });
   if (items.length === 0) return;
 
@@ -94,6 +110,20 @@ export async function markDelivered(orderId: string) {
     });
     await syncOrderStatus(tx, orderId);
   });
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { user: true },
+  });
+
+  if (order) {
+    await sendOrderDeliveredEmail({
+      email: order.user.email,
+      orderId: order.id,
+      shippingName: order.shippingName,
+      items: items.map((i) => ({ title: i.title, quantity: i.quantity })),
+    });
+  }
 
   revalidatePath(`/satici/siparisler/${orderId}`);
   revalidatePath("/satici/siparisler");
