@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   // 2. Bulut ayarlı değilse yerel geliştirme klasörüne kaydet
   await mkdir(UPLOAD_DIR, { recursive: true });
   const name = `${randomUUID()}.${type}`;
-  await writeFile(path.join(UPLOAD_DIR, name), bytes);
+  await writeFile(path.join(process.cwd(), "uploads", name), bytes);
 
   return NextResponse.json({ url: `/uploads/${name}` });
 }

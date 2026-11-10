@@ -2,7 +2,7 @@ import crypto from "crypto";
 import path from "path";
 
 export const UPLOAD_DIR =
-  process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+  path.join(process.cwd(), "uploads");
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
