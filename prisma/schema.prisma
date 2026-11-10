@@ -33,7 +33,10 @@ model User {
   name         String?
   passwordHash String?
   googleId     String?    @unique
-  image        String?
+  image         String?
+  emailVerified DateTime?
+  verificationTokens VerificationToken[]
+  passwordResetTokens PasswordResetToken[]
   role         Role       @default(CUSTOMER)
   createdAt    DateTime   @default(now())
   seller       Seller?
@@ -158,4 +161,21 @@ model OrderItem {
   trackingNumber String?
   shippedAt      DateTime?
   deliveredAt    DateTime?
+}
+model VerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }

@@ -11,9 +11,9 @@ const messages: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ hata?: string }>;
+  searchParams: Promise<{ hata?: string; sifre?: string }>;
 }) {
-  const { hata } = await searchParams;
+  const { hata, sifre } = await searchParams;
   const message = hata ? messages[hata] : undefined;
 
   return (
@@ -23,6 +23,12 @@ export default async function LoginPage({
         <p className="mb-6 mt-1 text-muted">
           Sepetin ve siparişlerin seni bekliyor.
         </p>
+
+        {sifre === "yenilendi" && (
+          <p className="mb-4 rounded-xl bg-mint-soft px-4 py-3 text-sm font-semibold text-mint-ink">
+            Şifren başarıyla güncellendi! Yeni şifrenle giriş yapabilirsin.
+          </p>
+        )}
 
         {message && (
           <p
@@ -38,6 +44,15 @@ export default async function LoginPage({
           veya e-posta ile
         </p>
         <AuthForm mode="login" action={login} />
+
+        <div className="mt-4 text-right">
+          <Link
+            href="/sifremi-unuttum"
+            className="text-xs font-semibold text-muted hover:text-coral"
+          >
+            Şifremi unuttum
+          </Link>
+        </div>
       </div>
       <p className="mt-4 text-center text-sm text-muted">
         Hesabın yok mu?{" "}
