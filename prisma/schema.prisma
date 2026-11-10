@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum FulfillmentStatus {
+  PREPARING
+  SHIPPED
+  DELIVERED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String?
+  googleId     String?    @unique
+  image        String?
+  role         Role       @default(CUSTOMER)
+  createdAt    DateTime   @default(now())
+  seller       Seller?
+  addresses    Address[]
+  orders       Order[]
+  cartItems    CartItem[]
+  favorites    Favorite[]
+}
+
+model Seller {
+  id          String      @id @default(cuid())
+  storeName   String      @unique
+  description String?
+  approved    Boolean     @default(false)
+  userId      String      @unique
+  user        User        @relation(fields: [userId], references: [id])
+  products    Product[]
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  slug     String     @unique
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+}
+
+model Product {
+  id          String         @id @default(cuid())
+  title       String
+  slug        String         @unique
+  description String
+  price       Int            // kuruş cinsinden (100 TL = 10000)
+  stock       Int            @default(0)
+  active      Boolean        @default(true)
+  sellerId    String
+  seller      Seller         @relation(fields: [sellerId], references: [id])
+  categoryId  String
+  category    Category       @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  favorites   Favorite[]
+  createdAt   DateTime       @default(now())
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  url       String
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Address {
+  id       String @id @default(cuid())
+  title    String
+  fullName String
+  phone    String
+  city     String
+  district String
+  line     String
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  quantity  Int     @default(1)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  status           OrderStatus @default(PENDING)
+  total            Int         // kuruş
+  paymentRef       String?     // ödeme sağlayıcının işlem numarası
+  shippingName     String
+  shippingPhone    String
+  shippingCity     String
+  shippingDistrict String
+  shippingLine     String
+  userId           String
+  user             User        @relation(fields: [userId], references: [id])
+  items            OrderItem[]
+  createdAt        DateTime    @default(now())
+}
+
+model OrderItem {
+  id             String            @id @default(cuid())
+  quantity       Int
+  unitPrice      Int               // sipariş anındaki fiyat (kuruş)
+  title          String            // sipariş anındaki ürün adı
+  orderId        String
+  order          Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product           @relation(fields: [productId], references: [id])
+  sellerId       String
+  seller         Seller            @relation(fields: [sellerId], references: [id])
+  fulfillment    FulfillmentStatus @default(PREPARING)
+  carrier        String?
+  trackingNumber String?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+}

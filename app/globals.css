@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #1b1340;
+  --color-coral: #e0264a;
+  --color-coral-dark: #c01c3d;
+  --color-sun: #ffc531;
+  --color-mint: #12b886;
+  --color-mint-soft: #d9f6ec;
+  --color-mint-ink: #0b6e52;
+  --color-lilac: #cfc4ff;
+  --color-paper: #f6f4ff;
+  --color-line: #e2ddf5;
+  --color-muted: #6a6490;
+}
+
+@theme inline {
+  --font-sans: var(--font-bricolage);
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-ink antialiased;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-coral;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-line bg-white p-5;
+  }
+  .field {
+    @apply w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-ink focus:ring-2 focus:ring-lilac;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center rounded-full bg-coral px-6 py-3 font-bold text-white hover:bg-coral-dark disabled:cursor-not-allowed disabled:bg-muted;
+  }
+}
