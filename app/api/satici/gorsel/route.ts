@@ -4,7 +4,12 @@ import path from "path";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserId } from "@/lib/session";
-import { UPLOAD_DIR, MAX_IMAGE_BYTES, detectImageType } from "@/lib/uploads";
+import {
+  UPLOAD_DIR,
+  MAX_IMAGE_BYTES,
+  detectImageType,
+  uploadToCloud,
+} from "@/lib/uploads";
 
 export async function POST(request: Request) {
   const userId = await getUserId();
@@ -43,6 +48,21 @@ export async function POST(request: Request) {
     );
   }
 
+  // 1. Önce bulut depolama (Cloudinary) ayarlıysa oraya yüklemeyi dene
+  try {
+    const cloudUrl = await uploadToCloud(bytes, type);
+    if (cloudUrl) {
+      return NextResponse.json({ url: cloudUrl });
+    }
+  } catch (e) {
+    console.error("Bulut yükleme hatası:", e);
+    return NextResponse.json(
+      { error: "Görsel bulut sunucusuna yüklenemedi." },
+      { status: 500 }
+    );
+  }
+
+  // 2. Bulut ayarlı değilse yerel geliştirme klasörüne kaydet
   await mkdir(UPLOAD_DIR, { recursive: true });
   const name = `${randomUUID()}.${type}`;
   await writeFile(path.join(UPLOAD_DIR, name), bytes);
