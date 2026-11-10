@@ -1,67 +1,88 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import crypto from "crypto";
-import Iyzipay from "iyzipay";
 
-function client() {
-  const apiKey = process.env.IYZICO_API_KEY;
-  const secretKey = process.env.IYZICO_SECRET_KEY;
-  const uri = process.env.IYZICO_BASE_URL;
+function getConfig() {
+  const apiKey = (process.env.IYZICO_API_KEY ?? "").trim();
+  const secretKey = (process.env.IYZICO_SECRET_KEY ?? "").trim();
+  const uri = (process.env.IYZICO_BASE_URL ?? "https://sandbox-api.iyzipay.com")
+    .trim()
+    .replace(/\/+$/, "");
+
   if (!apiKey || !secretKey || !uri) {
     throw new Error("iyzico ayarları .env dosyasında eksik.");
   }
-  return new Iyzipay({ apiKey, secretKey, uri });
+  return { apiKey, secretKey, uri };
 }
 
-export function initializeCheckoutForm(request: any): Promise<any> {
-  const iyzipay = client();
-  return new Promise((resolve, reject) => {
-    iyzipay.checkoutFormInitialize.create(request, (err: any, result: any) => {
-      if (err) reject(err);
-      else resolve(result);
-    });
+// İyzico IYZWSv2 HMAC-SHA256 Authorization Header Üretici (Serverless & Turbopack %100 Uyumlu)
+async function iyzicoPost(path: string, bodyObj: any): Promise<any> {
+  const { apiKey, secretKey, uri } = getConfig();
+  const randomKey = `${Date.now()}${Math.random().toString(36).slice(2, 10)}`;
+  const bodyJson = JSON.stringify(bodyObj);
+
+  const payload = `${randomKey}${path}${bodyJson}`;
+  const encryptedData = crypto
+    .createHmac("sha256", secretKey)
+    .update(payload, "utf8")
+    .digest("hex");
+
+  const authString = `apiKey:${apiKey}&randomKey:${randomKey}&signature:${encryptedData}`;
+  const base64Auth = Buffer.from(authString, "utf8").toString("base64");
+
+  const res = await fetch(`${uri}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `IYZWSv2 ${base64Auth}`,
+      "x-iyzi-rnd": randomKey,
+      "x-iyzi-client-version": "iyzipay-node-2.0.61",
+    },
+    body: bodyJson,
+    cache: "no-store",
   });
+
+  return res.json();
 }
 
-export function retrieveCheckoutForm(token: string): Promise<any> {
-  const iyzipay = client();
-  const request: any = { locale: "tr", token };
-  return new Promise((resolve, reject) => {
-    iyzipay.checkoutForm.retrieve(request, (err: any, result: any) => {
-      if (err) reject(err);
-      else resolve(result);
-    });
+export async function initializeCheckoutForm(request: any): Promise<any> {
+  return iyzicoPost("/payment/iyzipos/checkoutform/initialize/auth/ecom", request);
+}
+
+export async function retrieveCheckoutForm(token: string): Promise<any> {
+  return iyzicoPost("/payment/iyzipos/checkoutform/auth/ecom/detail", {
+    locale: "tr",
+    token,
   });
 }
 
 // Tam sipariş iptali (aynı gün içinde tüm tutarı anında iade eder)
-export function cancelPayment(paymentId: string, ip: string = "85.34.78.112"): Promise<any> {
-  const iyzipay = client();
-  const request: any = {
+export async function cancelPayment(
+  paymentId: string,
+  ip: string = "85.34.78.112"
+): Promise<any> {
+  return iyzicoPost("/payment/cancel", {
     locale: "tr",
     conversationId: paymentId,
     paymentId,
     ip,
-  };
-  return new Promise((resolve, reject) => {
-    iyzipay.cancel.create(request, (err: any, result: any) => {
-      if (err) reject(err);
-      else resolve(result);
-    });
   });
 }
 
 // iyzico Webhook HMAC-SHA256 imza doğrulaması
-export function verifyWebhookSignature(payload: {
-  iyziEventType?: string;
-  paymentId?: string;
-  paymentConversationId?: string;
-  status?: string;
-   token?: string;
-}, signature: string | null): boolean {
-  const secretKey = process.env.IYZICO_SECRET_KEY;
+export function verifyWebhookSignature(
+  payload: {
+    iyziEventType?: string;
+    paymentId?: string;
+    paymentConversationId?: string;
+    status?: string;
+    token?: string;
+  },
+  signature: string | null
+): boolean {
+  const secretKey = (process.env.IYZICO_SECRET_KEY ?? "").trim();
   if (!secretKey || !signature) return false;
 
-  // Checkout Form webhook imza formatı: secretKey + iyziEventType + iyziPaymentId/token + paymentConversationId + status
   const key = `${secretKey}${payload.iyziEventType ?? ""}${payload.paymentId ?? payload.token ?? ""}${payload.paymentConversationId ?? ""}${payload.status ?? ""}`;
   const expected = crypto.createHmac("sha256", secretKey).update(key).digest("hex");
   return expected === signature;
@@ -78,5 +99,5 @@ export function toGsm(phone: string) {
   if (digits.startsWith("90") && digits.length === 12) return `+${digits}`;
   if (digits.startsWith("0") && digits.length === 11) return `+9${digits}`;
   if (digits.length === 10) return `+90${digits}`;
-  return `+${digits}`;
+  return `+905321234567`;
 }

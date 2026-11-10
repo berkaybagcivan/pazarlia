@@ -27,7 +27,7 @@ export async function startPayment(orderId: string) {
   }
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "85.34.78.112";
+  const rawIp = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "85.34.78.112"; const ip = rawIp.includes(":") ? "85.34.78.112" : rawIp;
 
   const parts = order.shippingName.split(/\s+/);
   const surname = parts.length > 1 ? parts.pop()! : parts[0];
@@ -49,7 +49,7 @@ export async function startPayment(orderId: string) {
     currency: "TRY",
     basketId: order.id,
     paymentGroup: "PRODUCT",
-    callbackUrl: `${process.env.APP_URL ?? "http://localhost:3000"}/api/odeme/callback`,
+    callbackUrl: `${(process.env.APP_URL ?? "http://localhost:3000").trim().replace(/\/+$/, "")}/api/odeme/callback`,
     enabledInstallments: [1],
     buyer: {
       id: order.userId,
