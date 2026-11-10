@@ -3,7 +3,40 @@
 import { useRef, useState } from "react";
 
 const MAX_FILES = 5;
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024; // Vercel'in 4,5 MB sınırının altında
+const MAX_SIDE = 2000;
+
+// Büyük fotoğrafları yüklemeden önce tarayıcıda küçültür
+async function shrink(file: File): Promise<File> {
+  if (file.size <= 1.5 * 1024 * 1024) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.85)
+    );
+    if (!blob || blob.size >= file.size) return file;
+
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", {
+      type: "image/jpeg",
+    });
+  } catch {
+    return file;
+  }
+}
 
 type Props = {
   initial: string[];
@@ -35,18 +68,23 @@ export default function ImageUploader({ initial, onBusyChange }: Props) {
 
     setBusyState(true);
     const added: string[] = [];
-    for (const file of files.slice(0, room)) {
+    for (const original of files.slice(0, room)) {
+      const file = await shrink(original);
       if (file.size > MAX_BYTES) {
-        setError(`“${file.name}” 5 MB’dan büyük.`);
+        setError(`“${original.name}” çok büyük, 4 MB’ın altına küçülemedi.`);
         continue;
       }
+
       const body = new FormData();
       body.append("file", file);
       try {
         const res = await fetch("/api/satici/gorsel", { method: "POST", body });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error ?? "Görsel yüklenemedi.");
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.url) {
+          setError(
+            data?.error ??
+              (res.status === 413 ? "Görsel çok büyük." : "Görsel yüklenemedi.")
+          );
           continue;
         }
         added.push(data.url);

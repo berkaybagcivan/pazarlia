@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { requireSeller } from "@/lib/seller";
-import { UPLOAD_URL_PATTERN } from "@/lib/uploads";
+import { isAllowedImageUrl } from "@/lib/uploads";
 
 /* ---------- Mağaza açma ---------- */
 
@@ -131,7 +131,7 @@ export async function saveProduct(
   // Sadece kendi yüklediğimiz görseller (ya da üründe zaten olanlar) kabul edilir
   const keep = new Set(existing?.images.map((i) => i.url) ?? []);
   const images = Array.from(new Set(formData.getAll("images").map(String))).filter(
-    (u) => UPLOAD_URL_PATTERN.test(u) || keep.has(u)
+    (u) => isAllowedImageUrl(u) || keep.has(u)
   );
 
   if (values.title.length < 3 || values.title.length > 120) {

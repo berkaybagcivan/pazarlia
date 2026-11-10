@@ -23,6 +23,13 @@ export async function POST(request: Request) {
     );
   }
 
+    if (!seller.approved) {
+    return NextResponse.json(
+      { error: "Mağazan onaylandıktan sonra görsel yükleyebilirsin." },
+      { status: 403 }
+    );
+  }
+
   let file: FormDataEntryValue | null = null;
   try {
     file = (await request.formData()).get("file");
@@ -34,7 +41,7 @@ export async function POST(request: Request) {
   }
   if (file.size > MAX_IMAGE_BYTES) {
     return NextResponse.json(
-      { error: "Görsel en fazla 5 MB olabilir." },
+      { error: "Görsel en fazla 4 MB olabilir." },
       { status: 413 }
     );
   }
@@ -48,7 +55,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // 1. Önce bulut depolama (Cloudinary) ayarlıysa oraya yüklemeyi dene
+  // 1. Bulut depolama (Cloudinary) ayarlıysa oraya yükle
   try {
     const cloudUrl = await uploadToCloud(bytes, type);
     if (cloudUrl) {
@@ -62,10 +69,19 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2. Bulut ayarlı değilse yerel geliştirme klasörüne kaydet
+  // 2. Canlıda yerel diske yazılamaz, ayar eksikse net bir hata ver
+  if (process.env.NODE_ENV === "production") {
+    console.error("Cloudinary ayarları eksik, görsel kaydedilemedi.");
+    return NextResponse.json(
+      { error: "Görsel depolama ayarlı değil. Lütfen site yöneticisine haber ver." },
+      { status: 500 }
+    );
+  }
+
+  // 3. Geliştirme: yerel klasöre kaydet
   await mkdir(UPLOAD_DIR, { recursive: true });
   const name = `${randomUUID()}.${type}`;
-  await writeFile(path.join(process.cwd(), "uploads", name), bytes);
+  await writeFile(path.join(UPLOAD_DIR, name), bytes);
 
   return NextResponse.json({ url: `/uploads/${name}` });
 }

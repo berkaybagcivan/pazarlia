@@ -94,7 +94,7 @@ export default function ProductForm({ action, categories, submitLabel, product }
       <div>
         <p className="text-sm font-semibold">Görseller</p>
         <p className="mb-2 text-xs text-muted">
-          İlk görsel kapak olur. JPG, PNG veya WebP, en fazla 5 MB, en çok 5 görsel.
+          İlk görsel kapak olur. JPG, PNG veya WebP, en çok 5 görsel. Büyük fotoğraflar otomatik küçültülür.
         </p>
         <ImageUploader initial={product?.images ?? []} onBusyChange={setUploading} />
       </div>

@@ -1,20 +1,25 @@
 import crypto from "crypto";
 import path from "path";
 
-export const UPLOAD_DIR =
-  path.join(process.cwd(), "uploads");
+export const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
-// Hem yerel (/uploads/...) hem de bulut (https://...) görsel adreslerini kabul eder
-export const UPLOAD_URL_PATTERN =
-  /^(\/uploads\/[a-f0-9-]{36}\.(jpg|png|webp)|https:\/\/res\.cloudinary\.com\/.+|https:\/\/images\.unsplash\.com\/.+)$/;
+// Vercel fonksiyonlarının 4,5 MB istek sınırının altında kalır
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export const CONTENT_TYPES = {
   jpg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
 } as const;
+
+const LOCAL_URL = /^\/uploads\/[a-f0-9-]{36}\.(jpg|png|webp)$/;
+
+// Sadece kendi yüklediğimiz görsellerin adreslerini kabul eder
+export function isAllowedImageUrl(url: string) {
+  if (LOCAL_URL.test(url)) return true;
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  return !!cloud && url.startsWith(`https://res.cloudinary.com/${cloud}/image/upload/`);
+}
 
 // Dosya adına ya da tarayıcının söylediğine değil, dosyanın gerçek içeriğine (magic bytes) bakar
 export function detectImageType(b: Uint8Array): keyof typeof CONTENT_TYPES | null {
@@ -35,7 +40,7 @@ export function detectImageType(b: Uint8Array): keyof typeof CONTENT_TYPES | nul
   return null;
 }
 
-// Bulut depolama (Cloudinary) aktifse oraya yükler, değilse null döner (yerel diske düşer)
+// Bulut depolama (Cloudinary) aktifse oraya yükler, değilse null döner
 export async function uploadToCloud(
   bytes: Uint8Array,
   type: keyof typeof CONTENT_TYPES
