@@ -35,19 +35,7 @@ export default function ProfileMenu({
 
   return (
     <div className="relative" ref={menuRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-2 rounded-full border border-line bg-white p-1 pr-3 text-sm font-semibold hover:border-ink transition focus:outline-none"
-      >
-        <Avatar
-          name={name}
-          email={email}
-          image={image}
-          className="h-8 w-8 text-xs"
-        />
-        <span className="max-w-[120px] truncate">{name || email}</span>
-      </button>
+      <button type="button" onClick={() => setIsOpen((prev) => !prev)} className="flex items-center justify-center rounded-full ring-2 ring-white/20 hover:ring-coral transition focus:outline-none" aria-label="Profil menüsü"><Avatar name={name} email={email} image={image} className="h-10 w-10 text-sm" /></button>
 
       {isOpen && (
         <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-line bg-white py-2 shadow-lg z-50">
