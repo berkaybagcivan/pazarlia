@@ -44,6 +44,7 @@ model User {
   orders       Order[]
   cartItems    CartItem[]
   favorites    Favorite[]
+  reviews Review[]
 }
 
 model Seller {
@@ -85,6 +86,7 @@ model Product {
   orderItems  OrderItem[]
   favorites   Favorite[]
   createdAt   DateTime       @default(now())
+  reviews Review[]
 }
 
 model ProductImage {
@@ -178,4 +180,17 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1 ile 5 arası yıldız
+  comment   String?  @db.Text
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId]) // Bir kullanıcı aynı ürüne sadece 1 kez yorum yapabilir
 }
